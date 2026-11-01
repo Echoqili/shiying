@@ -1,4 +1,5 @@
 """Exercise the Windows distribution against localhost; never calls a cloud AI service."""
+import argparse
 import json
 import os
 import subprocess
@@ -13,7 +14,9 @@ sys.path.insert(0, str(ROOT / 'tests'))
 from test_integration import IntegrationTests  # noqa: E402
 from videodesk.core import new_task  # noqa: E402
 
-exe = ROOT / 'dist' / 'Shiying' / 'Shiying.exe'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--exe', type=Path, default=ROOT / 'dist' / 'Shiying' / 'Shiying.exe')
+exe = parser.parse_args().exe.resolve()
 if not exe.is_file():
     raise SystemExit('Build Shiying.exe first.')
 

@@ -20,6 +20,7 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 LicenseFile=..\LICENSE
+InfoBeforeFile=..\THIRD_PARTY_NOTICES.md
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
@@ -28,9 +29,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "..\dist\Shiying\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
+
 [Icons]
 Name: "{group}\拾影 Shiying"; Filename: "{app}\Shiying.exe"
-Name: "{autodesktop}\拾影 Shiying"; Filename: "{app}\Shiying.exe"
+Name: "{autodesktop}\拾影 Shiying"; Filename: "{app}\Shiying.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Shiying.exe"; Description: "Launch Shiying"; Flags: nowait postinstall skipifsilent
