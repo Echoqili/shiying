@@ -1,0 +1,5 @@
+PySide6-Essentials>=6.8,<7
+yt-dlp[default]==2026.10.26
+qoder-agent-sdk==1.0.17
+requests>=2.32,<3
+playwright>=1.50,<2
