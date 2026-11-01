@@ -9,14 +9,22 @@ if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'tools\ffmpeg.exe'))) 
     throw 'FFmpeg tools are missing. See README.md.'
 }
 $env:PYTHONPATH = $PSScriptRoot
+$taskOriginalPath = $env:PATH
+$taskBasePrefix = & $taskPython -c "import sys; print(sys.base_prefix)"
+# Keep unrelated developer tools' ICU/OpenSSL DLLs out of the frozen application.
+$env:PATH = "$(Split-Path -Parent $taskPython);$taskBasePrefix;$env:SystemRoot\System32;$env:SystemRoot"
+try {
 & $taskPython scripts/make_icon.py
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed.' }
 & $taskPython scripts/collect_licenses.py
 if ($LASTEXITCODE -ne 0) { throw 'License collection failed.' }
-& $taskPython -m PyInstaller --noconfirm Shiying.spec
+& $taskPython -m PyInstaller --clean --noconfirm Shiying.spec
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
 foreach ($taskDocument in @('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs\INSTALL.md')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $taskDocument) -Destination (Join-Path $PSScriptRoot 'dist\Shiying') -Force
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'third_party') -Destination (Join-Path $PSScriptRoot 'dist\Shiying') -Recurse -Force
 Write-Output 'Built: dist\Shiying\Shiying.exe'
+} finally {
+    $env:PATH = $taskOriginalPath
+}
