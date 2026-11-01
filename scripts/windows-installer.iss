@@ -23,7 +23,7 @@ LicenseFile=..\LICENSE
 InfoBeforeFile=..\THIRD_PARTY_NOTICES.md
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimp"; MessagesFile: "..\third_party\inno\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
