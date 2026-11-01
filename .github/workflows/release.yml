@@ -1,0 +1,69 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt "PySide6-Essentials==6.11.0"
+      - name: Prepare FFmpeg
+        run: .\.venv\Scripts\python.exe scripts/prepare_tools.py --download
+      - name: Test source
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+      - name: Build desktop application
+        run: .\build.ps1
+      - name: Verify desktop application
+        run: .\.venv\Scripts\python.exe scripts/verify_packaged.py
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $taskCompiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $taskCompiler /Q scripts/windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+      - name: Package portable app and checksums
+        run: .\.venv\Scripts\python.exe scripts/package_release.py
+      - name: Verify installer and installed app
+        shell: pwsh
+        run: |
+          $taskInstallDir = Join-Path $env:RUNNER_TEMP 'Shiying-release-test'
+          $taskInstaller = (Resolve-Path 'dist/release/Shiying-1.0.0-windows-x64-setup.exe').Path
+          $taskArguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', '/TASKS=""', ('/DIR="' + $taskInstallDir + '"'))
+          $taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList $taskArguments -WindowStyle Hidden -Wait -PassThru
+          if ($taskProcess.ExitCode -ne 0) { throw 'Installer test failed' }
+          .\.venv\Scripts\python.exe scripts/verify_packaged.py --exe (Join-Path $taskInstallDir 'Shiying.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application test failed' }
+          $taskResolvedInstall = [System.IO.Path]::GetFullPath($taskInstallDir)
+          $taskResolvedTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          if (-not $taskResolvedInstall.StartsWith($taskResolvedTemp + '\')) { throw 'Unexpected uninstaller test path' }
+          $taskProcess = Start-Process -FilePath (Join-Path $taskResolvedInstall 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -WindowStyle Hidden -Wait -PassThru
+          if ($taskProcess.ExitCode -ne 0 -or (Test-Path -LiteralPath (Join-Path $taskResolvedInstall 'Shiying.exe'))) { throw 'Uninstall test failed' }
+      - name: Upload assets to draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $taskDraft = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -ne 0 -or $taskDraft -ne 'true') { throw 'Expected an existing draft release' }
+          gh release upload $env:RELEASE_TAG dist/release/Shiying-1.0.0-windows-x64-setup.exe dist/release/Shiying-1.0.0-windows-x64.zip dist/release/SHA256SUMS.txt --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
