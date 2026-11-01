@@ -17,6 +17,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Locate draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $taskReleases = gh api repos/$env:GITHUB_REPOSITORY/releases | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
+          $taskRelease = $taskReleases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG } | Select-Object -First 1
+          if (-not $taskRelease -or -not $taskRelease.draft) { throw 'Expected an existing draft release' }
+          "SHIYING_RELEASE_ID=$($taskRelease.id)" >> $env:GITHUB_ENV
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -57,13 +68,28 @@ jobs:
           if (-not $taskResolvedInstall.StartsWith($taskResolvedTemp + '\')) { throw 'Unexpected uninstaller test path' }
           $taskProcess = Start-Process -FilePath (Join-Path $taskResolvedInstall 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -WindowStyle Hidden -Wait -PassThru
           if ($taskProcess.ExitCode -ne 0 -or (Test-Path -LiteralPath (Join-Path $taskResolvedInstall 'Shiying.exe'))) { throw 'Uninstall test failed' }
+      - name: Preserve verified release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: dist/release/*
+          compression-level: 0
+          retention-days: 7
       - name: Upload assets to draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          $taskDraft = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
-          if ($LASTEXITCODE -ne 0 -or $taskDraft -ne 'true') { throw 'Expected an existing draft release' }
-          gh release upload $env:RELEASE_TAG dist/release/Shiying-1.0.0-windows-x64-setup.exe dist/release/Shiying-1.0.0-windows-x64.zip dist/release/SHA256SUMS.txt --clobber --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
+          $taskRelease = gh api repos/$env:GITHUB_REPOSITORY/releases/$env:SHIYING_RELEASE_ID | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $taskRelease.draft) { throw 'Draft release is no longer available' }
+          foreach ($taskFile in Get-ChildItem -LiteralPath dist/release -File) {
+            foreach ($taskAsset in @($taskRelease.assets | Where-Object { $_.name -eq $taskFile.Name })) {
+              gh api --method DELETE repos/$env:GITHUB_REPOSITORY/releases/assets/$($taskAsset.id) --silent
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot replace existing draft asset' }
+            }
+            $taskUrl = 'https://uploads.github.com/repos/' + $env:GITHUB_REPOSITORY + '/releases/' + $env:SHIYING_RELEASE_ID + '/assets?name=' + [uri]::EscapeDataString($taskFile.Name)
+            $taskHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+            $taskUploaded = Invoke-RestMethod -Method Post -Uri $taskUrl -Headers $taskHeaders -InFile $taskFile.FullName -ContentType 'application/octet-stream' -TimeoutSec 600
+            if ($taskUploaded.size -ne $taskFile.Length) { throw 'Uploaded asset size mismatch' }
+            Write-Output "Uploaded $($taskFile.Name)"
+          }
