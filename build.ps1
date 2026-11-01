@@ -1,6 +1,7 @@
+param([string]$Python = '')
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-$taskPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$taskPython = if ($Python) { $Python } else { Join-Path $PSScriptRoot '.venv\Scripts\python.exe' }
 if (-not (Test-Path -LiteralPath $taskPython)) {
     throw 'Create a Python virtual environment and install requirements-build.txt first. See README.md.'
 }

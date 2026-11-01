@@ -2,13 +2,22 @@
 
 Windows 桌面应用，基于 yt-dlp + PySide6。支持视频/MP3、字幕、播放列表、多链接队列、取消重试，以及 Qoder 或自定义 AI 生成中文笔记。
 
-本项目自己的源码使用 [MIT 许可证](LICENSE)。第三方组件遵循各自的许可证。当前仓库提供源码；下载源码 ZIP 后需要按下文安装依赖，源码 ZIP 不能直接当作 Windows 安装包运行。
+本项目自己的源码使用 [MIT 许可证](LICENSE)。第三方组件遵循各自的许可证。
+
+## Windows 下载（无需 Python）
+
+前往 **[Releases 下载最新版](https://github.com/Echoqili/shiying/releases/latest)**：
+
+- 推荐下载 `Shiying-1.0.0-windows-x64-setup.exe`，双击安装后从桌面启动。
+- 或下载 `Shiying-1.0.0-windows-x64.zip`，全部解压后运行 `Shiying/Shiying.exe`，保留整个文件夹。
+
+支持 Windows 10/11 64 位，包含 FFmpeg。AI 服务需使用自己的账号或 API 配置。详细步骤见 [安装说明](docs/INSTALL.md)。下载页的 `Source code` 是源码，不能直接当作 Windows 安装包运行。
 
 ![拾影米白色界面](docs/assets/preview.png)
 
 ## 运行与使用
 
-从源码启动请先完成下方安装步骤。自行构建后，可双击 `dist/Shiying/Shiying.exe` 或 `launch.cmd`；打包版需要保留整个 `Shiying` 文件夹，无需另外安装 Python。
+安装版可使用桌面快捷方式，免安装版双击 `Shiying.exe`。从源码启动请先完成下方安装步骤。自行构建后，可双击 `dist/Shiying/Shiying.exe` 或 `launch.cmd`。
 
 1. 粘贴完整视频链接，每行一个。
 2. 选择画质、视频或 MP3、保存目录；播放列表需主动勾选。
@@ -105,6 +114,15 @@ FFmpeg 工具由上述 `--download` 命令下载、校验并放入 `tools/`，�
 $env:SHIYING_DATA_DIR = "$PWD/tests/.tmp/smoke"
 .\.venv\Scripts\python.exe main.py --smoke --screenshot "$PWD/docs/preview.png"
 ```
+
+制作发行包（安装版需要额外安装 Inno Setup 6，并使 `ISCC.exe` 在 PATH 中）：
+
+```powershell
+ISCC.exe scripts/windows-installer.iss
+.\.venv\Scripts\python.exe scripts/package_release.py
+```
+
+生成文件位于 `dist/release/`，包含安装程序、免安装 ZIP 及 `SHA256SUMS.txt`。发行构建应使用独立虚拟环境；`build.ps1 -Python <虚拟环境的 python.exe 路径>` 可指定构建环境。
 
 测试使用本地 HTTP 视频和模拟 AI 服务，验证真实下载、音频分段、协议、密钥保护和故障恢复。Windows 打包程序应另行验证启动和工作进程通信。
 

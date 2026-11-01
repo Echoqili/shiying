@@ -7,6 +7,7 @@ datas = [
     (str(root / 'tools'), 'tools'),
     (str(root / 'README.md'), '.'),
     (str(root / 'LICENSE'), '.'),
+    (str(root / 'docs' / 'INSTALL.md'), '.'),
     (str(root / 'THIRD_PARTY_NOTICES.md'), '.'),
     (str(root / 'licenses'), 'licenses'),
 ]

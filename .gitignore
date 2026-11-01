@@ -28,3 +28,4 @@ tasks.json
 /docs/*
 !/docs/assets/
 !/docs/TESTING.md
+!/docs/INSTALL.md
