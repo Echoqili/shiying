@@ -1,4 +1,6 @@
-#define AppVersion "1.0.0"
+#ifndef AppVersion
+  #error "Pass the application version using /DAppVersion=x.y.z"
+#endif
 [Setup]
 AppId={{7125967A-91D4-4E39-9B63-2AB97388DFA1}
 AppName=拾影 Shiying

@@ -1,44 +1,70 @@
 name: Build Windows release
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing draft release tag
-        required: true
-        default: v1.0.0
+        description: Version tag (optional for build only)
+        type: string
+        required: false
+      publish:
+        description: Publish a release after all checks pass
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.event_name == 'push' && github.ref_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish }}
     steps:
       - uses: actions/checkout@v4
-      - name: Locate draft release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          $taskReleases = gh api repos/$env:GITHUB_REPOSITORY/releases | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
-          $taskRelease = $taskReleases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG } | Select-Object -First 1
-          if (-not $taskRelease -or -not $taskRelease.draft) { throw 'Expected an existing draft release' }
-          "SHIYING_RELEASE_ID=$($taskRelease.id)" >> $env:GITHUB_ENV
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+      - name: Validate release version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $taskVersion = python -c "from videodesk import __version__; print(__version__)"
+          if ($LASTEXITCODE -ne 0 -or $taskVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid application version' }
+          $taskTag = if ($env:RELEASE_TAG) { $env:RELEASE_TAG } else { "v$taskVersion" }
+          if ($taskTag -cne "v$taskVersion") { throw 'Tag must match videodesk/__init__.py version' }
+          "APP_VERSION=$taskVersion" >> $env:GITHUB_ENV
+          "RELEASE_TAG=$taskTag" >> $env:GITHUB_ENV
+          if ($env:PUBLISH_RELEASE -eq 'true') {
+            git fetch --depth=1 origin "refs/tags/$taskTag"
+            if ($LASTEXITCODE -ne 0) { throw 'Create and push the version tag before publishing' }
+            $taskTaggedCommit = git rev-parse 'FETCH_HEAD^{commit}'
+            $taskBuiltCommit = git rev-parse HEAD
+            if ($taskTaggedCommit -ne $taskBuiltCommit) { throw 'Tag points to a different source commit' }
+            $taskReleases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
+            $taskRelease = $taskReleases | Where-Object { $_.tag_name -eq $taskTag } | Select-Object -First 1
+            if ($taskRelease -and -not $taskRelease.draft) { throw 'This version is already published; use a new version' }
+          }
       - name: Install build dependencies
-        shell: pwsh
         run: |
           python -m venv .venv
-          .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt "PySide6-Essentials==6.11.0"
+          .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt "PySide6-Essentials==6.11.0" ruff
       - name: Prepare FFmpeg
         run: .\.venv\Scripts\python.exe scripts/prepare_tools.py --download
+      - name: Lint
+        run: .\.venv\Scripts\python.exe -m ruff check main.py videodesk scripts tests
       - name: Test source
         run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
       - name: Build desktop application
@@ -46,18 +72,16 @@ jobs:
       - name: Verify desktop application
         run: .\.venv\Scripts\python.exe scripts/verify_packaged.py
       - name: Build installer
-        shell: pwsh
         run: |
           $taskCompiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          & $taskCompiler /Q scripts/windows-installer.iss
+          & $taskCompiler /Q "/DAppVersion=$env:APP_VERSION" scripts/windows-installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
       - name: Package portable app and checksums
         run: .\.venv\Scripts\python.exe scripts/package_release.py
       - name: Verify installer and installed app
-        shell: pwsh
         run: |
           $taskInstallDir = Join-Path $env:RUNNER_TEMP 'Shiying-release-test'
-          $taskInstaller = (Resolve-Path 'dist/release/Shiying-1.0.0-windows-x64-setup.exe').Path
+          $taskInstaller = (Resolve-Path "dist/release/Shiying-$env:APP_VERSION-windows-x64-setup.exe").Path
           $taskArguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', '/TASKS=""', ('/DIR="' + $taskInstallDir + '"'))
           $taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList $taskArguments -WindowStyle Hidden -Wait -PassThru
           if ($taskProcess.ExitCode -ne 0) { throw 'Installer test failed' }
@@ -71,25 +95,39 @@ jobs:
       - name: Preserve verified release files
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release
+          name: Shiying-${{ env.APP_VERSION }}-windows-x64
           path: dist/release/*
           compression-level: 0
           retention-days: 7
-      - name: Upload assets to draft release
-        shell: pwsh
+          if-no-files-found: error
+      - name: Upload and publish release
+        if: env.PUBLISH_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $taskRelease = gh api repos/$env:GITHUB_REPOSITORY/releases/$env:SHIYING_RELEASE_ID | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or -not $taskRelease.draft) { throw 'Draft release is no longer available' }
+          $taskReleases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
+          $taskRelease = $taskReleases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG } | Select-Object -First 1
+          if ($taskRelease -and -not $taskRelease.draft) { throw 'Cannot replace a published release' }
+          if (-not $taskRelease) {
+            $taskNotes = @("Windows 10/11 64 位，无需 Python。", "", "安装版：下载 Shiying-$env:APP_VERSION-windows-x64-setup.exe，双击安装。", "免安装版：下载 ZIP，全部解压后运行 Shiying/Shiying.exe。", "", "包含 FFmpeg；AI 需配置自己的账号或 API。", "安装包未签名；文件校验值见 SHA256SUMS.txt。", "", "自动测试、打包程序验证及安装/卸载验证均已通过。") -join "`n"
+            $taskBody = @{ tag_name=$env:RELEASE_TAG; target_commitish=(git rev-parse HEAD); name="拾影 Shiying $env:RELEASE_TAG"; draft=$true; body=$taskNotes } | ConvertTo-Json
+            $taskBody | gh api --method POST "repos/$env:GITHUB_REPOSITORY/releases" --input - > .cache/action-release.json
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot create release draft' }
+            $taskRelease = Get-Content -LiteralPath .cache/action-release.json -Raw | ConvertFrom-Json
+          }
           foreach ($taskFile in Get-ChildItem -LiteralPath dist/release -File) {
             foreach ($taskAsset in @($taskRelease.assets | Where-Object { $_.name -eq $taskFile.Name })) {
-              gh api --method DELETE repos/$env:GITHUB_REPOSITORY/releases/assets/$($taskAsset.id) --silent
-              if ($LASTEXITCODE -ne 0) { throw 'Cannot replace existing draft asset' }
+              gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/releases/assets/$($taskAsset.id)" --silent
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot replace draft asset' }
             }
-            $taskUrl = 'https://uploads.github.com/repos/' + $env:GITHUB_REPOSITORY + '/releases/' + $env:SHIYING_RELEASE_ID + '/assets?name=' + [uri]::EscapeDataString($taskFile.Name)
-            $taskHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+            $taskUrl = 'https://uploads.github.com/repos/' + $env:GITHUB_REPOSITORY + '/releases/' + $taskRelease.id + '/assets?name=' + [uri]::EscapeDataString($taskFile.Name)
+            $taskHeaders = @{ Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json' }
             $taskUploaded = Invoke-RestMethod -Method Post -Uri $taskUrl -Headers $taskHeaders -InFile $taskFile.FullName -ContentType 'application/octet-stream' -TimeoutSec 600
-            if ($taskUploaded.size -ne $taskFile.Length) { throw 'Uploaded asset size mismatch' }
-            Write-Output "Uploaded $($taskFile.Name)"
+            $taskDigest = 'sha256:' + (Get-FileHash -LiteralPath $taskFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($taskUploaded.size -ne $taskFile.Length -or $taskUploaded.digest -ne $taskDigest) { throw 'Release asset integrity mismatch' }
+            Write-Output "Verified $($taskFile.Name)"
           }
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($taskRelease.id)" -f "tag_name=$env:RELEASE_TAG" -f "target_commitish=$(git rev-parse HEAD)" -F draft=false -f make_latest=true --silent
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          "Published https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY

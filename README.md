@@ -118,11 +118,27 @@ $env:SHIYING_DATA_DIR = "$PWD/tests/.tmp/smoke"
 制作发行包（安装版需要额外安装 Inno Setup 6，并使 `ISCC.exe` 在 PATH 中）：
 
 ```powershell
-ISCC.exe scripts/windows-installer.iss
+$taskVersion = .\.venv\Scripts\python.exe -c "from videodesk import __version__; print(__version__)"
+ISCC.exe "/DAppVersion=$taskVersion" scripts/windows-installer.iss
 .\.venv\Scripts\python.exe scripts/package_release.py
 ```
 
 生成文件位于 `dist/release/`，包含安装程序、免安装 ZIP 及 `SHA256SUMS.txt`。发行构建应使用独立虚拟环境；`build.ps1 -Python <虚拟环境的 python.exe 路径>` 可指定构建环境。
+
+## GitHub Actions 自动构建与发版
+
+- 每次推送代码或提交 Pull Request，`Windows tests` 自动执行代码检查与测试。
+- 在仓库 **Actions → Build Windows release → Run workflow** 手动运行，默认只构建测试包。成功后可在该次运行的 **Artifacts** 下载安装版、免安装 ZIP 和 SHA256 校验文件，保留 7 天。
+- 正式发版：先更新 `videodesk/__init__.py` 中的 `__version__`，提交并推送代码，再创建匹配的版本标签。例如版本更新为 `1.0.1` 后：
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+推送 `v*` 标签会自动执行测试、Windows 打包、安装及卸载验证，上传并校验附件后公开 Release。版本标签必须与源码版本一致，已发布的版本不会被覆盖。安装包名称和界面版本均使用源码中的版本号。
+
+手动运行也可填写版本标签并勾选 `publish`，此时所选分支的提交必须与标签指向的提交一致。发版使用仓库自带的 `GITHUB_TOKEN`，无需另配个人密钥。
 
 测试使用本地 HTTP 视频和模拟 AI 服务，验证真实下载、音频分段、协议、密钥保护和故障恢复。Windows 打包程序应另行验证启动和工作进程通信。
 

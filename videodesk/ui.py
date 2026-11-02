@@ -111,7 +111,8 @@ class MainWindow(QMainWindow):
         layout.addSpacing(15)
         self.engine_state = label('●  本地下载引擎', 'Muted', 11)
         layout.addWidget(self.engine_state)
-        layout.addWidget(label('拾影  1.0.0', 'Muted', 10))
+        from . import __version__
+        layout.addWidget(label(f'拾影  {__version__}', 'Muted', 10))
         return frame
 
     def switch_page(self, index):

@@ -1,10 +1,14 @@
 """Create a portable ZIP and SHA256 sums after building the Windows application."""
 import hashlib
+import sys
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '1.0.0'
+sys.path.insert(0, str(ROOT))
+from videodesk import __version__  # noqa: E402
+
+VERSION = __version__
 application = ROOT / 'dist' / 'Shiying'
 output = ROOT / 'dist' / 'release'
 output.mkdir(parents=True, exist_ok=True)
