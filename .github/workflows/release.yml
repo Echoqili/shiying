@@ -100,6 +100,7 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
+          overwrite: true
       - name: Upload and publish release
         if: env.PUBLISH_RELEASE == 'true'
         env:
