@@ -8,8 +8,8 @@ Windows 桌面应用，基于 yt-dlp + PySide6。支持视频/MP3、字幕、播
 
 前往 **[Releases 下载最新版](https://github.com/Echoqili/shiying/releases/latest)**：
 
-- 推荐下载 `Shiying-1.0.0-windows-x64-setup.exe`，双击安装后从桌面启动。
-- 或下载 `Shiying-1.0.0-windows-x64.zip`，全部解压后运行 `Shiying/Shiying.exe`，保留整个文件夹。
+- 推荐下载以 `windows-x64-setup.exe` 结尾的安装版，双击安装后从桌面启动。
+- 或下载以 `windows-x64.zip` 结尾的免安装版，全部解压后运行 `Shiying/Shiying.exe`，保留整个文件夹。
 
 支持 Windows 10/11 64 位，包含 FFmpeg。AI 服务需使用自己的账号或 API 配置。详细步骤见 [安装说明](docs/INSTALL.md)。下载页的 `Source code` 是源码，不能直接当作 Windows 安装包运行。
 
