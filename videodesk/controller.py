@@ -188,6 +188,26 @@ class Controller(QObject):
         self.changed.emit(task['id'])
         QTimer.singleShot(0, self.next)
 
+    def remove(self, task):
+        """Remove a completed record while preserving its downloaded files and notes."""
+        if task not in self.tasks or task.get('status') in ACTIVE | {'queued'}:
+            return False
+        self.tasks.remove(task)
+        self.persist()
+        self.queue_changed.emit()
+        return True
+
+    def clear_finished(self):
+        """Clear terminal download records, keeping recoverable AI-partial work."""
+        before = len(self.tasks)
+        removable = {'complete', 'failed', 'cancelled', 'interrupted'}
+        self.tasks[:] = [task for task in self.tasks if task.get('status') not in removable]
+        removed = before - len(self.tasks)
+        if removed:
+            self.persist()
+            self.queue_changed.emit()
+        return removed
+
     def shutdown(self):
         self.shutting_down = True
         if self.job:

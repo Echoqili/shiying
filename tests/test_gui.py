@@ -79,6 +79,22 @@ class GuiTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_remove_records_preserves_files_and_keeps_recoverable_ai_work(self):
+        downloaded = Path(self.temp.name) / 'keep.mp4'
+        downloaded.write_bytes(b'video')
+        complete = new_task('https://example.test/done', self.fixture.settings, status='complete',
+                            files=[{'file': str(downloaded), 'title': 'done'}])
+        failed = new_task('https://example.test/fail', self.fixture.settings, status='failed')
+        partial = new_task('https://example.test/partial', self.fixture.settings, status='partial', ai=True)
+        self.controller.tasks = [complete, failed, partial]
+        self.controller.persist()
+        self.assertTrue(self.controller.remove(complete))
+        self.assertTrue(downloaded.is_file())
+        self.assertFalse(self.controller.remove(new_task('', self.fixture.settings, status='queued')))
+        self.assertEqual(self.controller.clear_finished(), 1)
+        self.assertEqual([task['id'] for task in self.controller.tasks], [partial['id']])
+        self.assertEqual([task['id'] for task in self.store.load_tasks()], [partial['id']])
+
 
 if __name__ == '__main__':
     unittest.main()

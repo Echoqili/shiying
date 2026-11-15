@@ -53,6 +53,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn('best[height<=720]', options['format'])
         self.assertFalse(options['noplaylist'] is False)
 
+    def test_best_quality_uses_highest_video_and_audio_streams(self):
+        options = download_options({'quality': 'best', 'mode': 'video', 'output': '.'}, ffmpeg=True)
+        self.assertEqual(options['format'], 'bestvideo+bestaudio/best')
+        self.assertNotIn('format_sort', options)
+
     def test_missing_ffmpeg_uses_combined_format(self):
         options = download_options({'quality': '1080', 'mode': 'video', 'output': '.'}, ffmpeg=False)
         self.assertNotIn('+', options['format'])

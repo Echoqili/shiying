@@ -121,7 +121,10 @@ def download(task: dict, settings: dict, emit) -> list[dict]:
                 filename = windows_compatible(filename, settings, emit)
             subtitles = [value.get('filepath') for value in (info.get('requested_subtitles') or {}).values() if value.get('filepath')]
             item = {'file': filename, 'title': info.get('title', Path(filename).stem),
-                    'source': info.get('webpage_url') or task['url'], 'subtitles': subtitles}
+                    'source': info.get('webpage_url') or task['url'], 'subtitles': subtitles,
+                    'width': info.get('width'), 'height': info.get('height'),
+                    'format_id': info.get('format_id'), 'vcodec': info.get('vcodec'),
+                    'acodec': info.get('acodec')}
             records.append(item)
             emit('artifact', item=item)
             return [], info

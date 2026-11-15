@@ -148,8 +148,9 @@ class MainWindow(QMainWindow):
         self.mode.addItem('提取 MP3', 'audio')
         self.mode.currentIndexChanged.connect(lambda: self.quality.setEnabled(self.mode.currentData() == 'video'))
         self.quality = QComboBox()
-        for text, value in [('最佳画质', 'best'), ('最高 1080p', '1080'), ('最高 720p', '720'), ('最高 480p', '480')]:
+        for text, value in [('最高可用画质', 'best'), ('最高 1080p', '1080'), ('最高 720p', '720'), ('最高 480p', '480')]:
             self.quality.addItem(text, value)
+        self.quality.setToolTip('优先最高分辨率视频流与最佳音频；实际清晰度受网站、原视频、登录权限和可用格式限制。')
         self.subtitles = QCheckBox('保存字幕')
         self.playlist = QCheckBox('整个播放列表')
         options.addWidget(self.mode)
@@ -196,6 +197,9 @@ class MainWindow(QMainWindow):
             control.clicked.connect(lambda checked=False, val=value: self.set_filter(val))
             self.filter_group.addButton(control)
             task_heading.addWidget(control)
+        self.clear_finished_button = button('清除已结束', self.clear_finished, small=True)
+        self.clear_finished_button.setToolTip('只删除已完成、失败、取消或中断的下载记录；不会删除已下载的视频、字幕或 AI 笔记。')
+        task_heading.addWidget(self.clear_finished_button)
         layout.addLayout(task_heading)
         self.task_stack = QStackedWidget()
         empty = QWidget()
@@ -356,6 +360,8 @@ class MainWindow(QMainWindow):
         self.footer.setText(f'{active} 个任务进行中  ·  {completed} 个已完成' if tasks else '准备就绪 · 添加链接即可开始')
         self.engine_state.setText('●  正在处理任务' if active else '●  本地下载引擎')
         self.provider_badge.setText('Qoder' if self.controller.settings['provider'] == 'qoder' else '自定义 AI')
+        removable = {'complete', 'failed', 'cancelled', 'interrupted'}
+        self.clear_finished_button.setEnabled(any(task.get('status') in removable for task in tasks))
 
     def task_action(self, task_id, action):
         task = next((t for t in self.controller.tasks if t['id'] == task_id), None)
@@ -375,6 +381,34 @@ class MainWindow(QMainWindow):
                 self.focus_note(task['notes'][0]['markdown'])
         elif action == 'detail':
             self.details(task)
+        elif action == 'delete':
+            self.delete_task(task)
+
+    def delete_task(self, task):
+        answer = QMessageBox.question(
+            self, '删除下载记录',
+            '只删除这条下载记录，不会删除已下载的视频、字幕或 AI 笔记。\n\n确定删除吗？',
+            QMessageBox.StandardButton.Delete | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer == QMessageBox.StandardButton.Delete and self.controller.remove(task):
+            self.rebuild()
+            self.footer.setText('已删除下载记录；本地文件仍保留。')
+
+    def clear_finished(self):
+        removable = sum(task.get('status') in {'complete', 'failed', 'cancelled', 'interrupted'} for task in self.controller.tasks)
+        if not removable:
+            return
+        answer = QMessageBox.question(
+            self, '清除已结束记录',
+            f'将删除 {removable} 条已结束的下载记录，不会删除任何已下载的视频、字幕或 AI 笔记。\n\n确定清除吗？',
+            QMessageBox.StandardButton.Delete | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer == QMessageBox.StandardButton.Delete:
+            removed = self.controller.clear_finished()
+            self.rebuild()
+            self.footer.setText(f'已清除 {removed} 条下载记录；本地文件仍保留。')
 
     def details(self, task):
         dialog = QDialog(self)
@@ -389,7 +423,12 @@ class MainWindow(QMainWindow):
         view.setReadOnly(True)
         content = f'来源：{task.get("url") or "本地文件"}\n保存目录：{task["output"]}\n\n{task.get("detail", "")}\n'
         if task.get('files'):
-            content += '\n文件：\n' + '\n'.join(f['file'] for f in task['files'])
+            records = []
+            for record in task['files']:
+                quality = f" · {record['width']}×{record['height']}" if record.get('width') and record.get('height') else ''
+                format_id = f" · 格式 {record['format_id']}" if record.get('format_id') else ''
+                records.append(record['file'] + quality + format_id)
+            content += '\n文件：\n' + '\n'.join(records)
         if task.get('transcript'):
             content += '\n\n文字稿：' + task['transcript']
         if task.get('logs'):

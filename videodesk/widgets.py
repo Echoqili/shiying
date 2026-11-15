@@ -89,8 +89,10 @@ class TaskCard(QFrame):
         actions.setSpacing(7)
         self.main_button = button('', lambda: self.action.emit(task['id'], self.main_action), small=True)
         self.extra_button = button('详情', lambda: self.action.emit(task['id'], 'detail'), small=True)
+        self.delete_button = button('删除记录', lambda: self.action.emit(task['id'], 'delete'), small=True)
         actions.addWidget(self.main_button)
         actions.addWidget(self.extra_button)
+        actions.addWidget(self.delete_button)
         actions.addStretch()
         layout.addLayout(actions)
         self.refresh()
@@ -107,7 +109,9 @@ class TaskCard(QFrame):
         self.title.setToolTip(task['title'])
         domain = urlsplit(task.get('url', '')).hostname or '本地文件'
         mode = 'AI 笔记' if task.get('action') == 'notes' else ('MP3 音频' if task.get('mode') == 'audio' else '视频')
-        self.source.setText(f'{domain}  ·  {mode}  ·  {task.get("created", "")}')
+        latest = (task.get('files') or [{}])[-1]
+        resolution = f'  ·  {latest["height"]}p' if latest.get('height') else ''
+        self.source.setText(f'{domain}  ·  {mode}{resolution}  ·  {task.get("created", "")}')
         self.progress.setValue(task.get('progress', 0))
         detail = task.get('detail', '').replace('\n', ' ')
         self.detail.setText(self.fontMetrics().elidedText(detail, Qt.TextElideMode.ElideRight, max(250, self.width() - 270)))
@@ -124,6 +128,7 @@ class TaskCard(QFrame):
         else:
             self.main_action = 'retry'
             self.main_button.setText('重新开始')
+        self.delete_button.setVisible(state not in ACTIVE and state != 'queued')
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

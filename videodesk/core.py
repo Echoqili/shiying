@@ -230,6 +230,9 @@ def download_options(task: dict, ffmpeg: bool) -> dict:
     height = task.get('quality', 'best')
     bound = f'[height<={int(height)}]' if height != 'best' else ''
     options = {
+        # yt-dlp chooses the highest resolution video-only stream plus the best
+        # available audio stream. The fallback is for sites exposing one combined
+        # format only; neither branch requests a lower resolution for “best”.
         'format': f'bestvideo{bound}+bestaudio/best{bound}' if ffmpeg else f'best{bound}',
         'outtmpl': str(Path(task['output']) / '%(title).160B [%(id)s].%(ext)s'),
         'windowsfilenames': True, 'noplaylist': not task.get('playlist', False),
@@ -239,7 +242,6 @@ def download_options(task: dict, ffmpeg: bool) -> dict:
         'writeautomaticsub': bool(task.get('subtitles') or task.get('ai')),
         'subtitleslangs': ['zh-Hans', 'zh-Hant', 'zh', 'en'],
         'subtitlesformat': 'vtt/srt/best', 'merge_output_format': 'mp4',
-        'format_sort': ['res', 'vcodec:h264', 'acodec:aac'],
     }
     if task.get('mode') == 'audio':
         if not ffmpeg:
