@@ -32,10 +32,10 @@ jobs:
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish }}
     steps:
       - uses: actions/checkout@v4
+      # pip 缓存会产生约 250 MiB/次且按分支堆积，禁用以控制 Actions 存储占用。
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
       - name: Validate release version
         env:
           GH_TOKEN: ${{ github.token }}
@@ -92,13 +92,16 @@ jobs:
           if (-not $taskResolvedInstall.StartsWith($taskResolvedTemp + '\')) { throw 'Unexpected uninstaller test path' }
           $taskProcess = Start-Process -FilePath (Join-Path $taskResolvedInstall 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -WindowStyle Hidden -Wait -PassThru
           if ($taskProcess.ExitCode -ne 0 -or (Test-Path -LiteralPath (Join-Path $taskResolvedInstall 'Shiying.exe'))) { throw 'Uninstall test failed' }
-      - name: Preserve verified release files
+      # 正式发布时产物已上传为 Release assets，无需再留一份 620 MiB 的 artifact。
+      # 仅手动「只构建不发布」时保留产物供下载，且最多 1 天。
+      - name: Preserve build-only artifacts (1 day)
+        if: env.PUBLISH_RELEASE != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Shiying-${{ env.APP_VERSION }}-windows-x64
           path: dist/release/*
           compression-level: 0
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
           overwrite: true
       - name: Upload and publish release

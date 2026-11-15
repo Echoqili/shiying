@@ -2,15 +2,22 @@ name: Windows tests
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+
+# 同一分支连续推送时取消旧任务，避免重复占用 Actions 分钟数。
+concurrency:
+  group: windows-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # 禁用 pip 缓存：每次 push 约 250 MiB 且按分支堆积，控制 Actions 存储占用。
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-          cache: pip
       - name: Install dependencies
         run: python -m pip install -r requirements-build.txt ruff
       - name: Prepare FFmpeg

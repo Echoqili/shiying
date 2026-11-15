@@ -1,0 +1,62 @@
+name: Clean up Actions storage
+
+# 兜底清理：正式发布不再上传 artifact，此任务清理手动构建遗留的产物与陈旧缓存。
+# 只删除创建/访问超过 1 天的条目，不影响正在运行或刚结束的构建。
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-storage-cleanup
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete stale artifacts and caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting entries older than $cutoff"
+          deleted=0
+          freed=0
+
+          artifact_rows=$(gh api --paginate "repos/$GH_REPO/actions/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.created_at < \"$cutoff\") | [(.id|tostring), ((.size_in_bytes // 0)|tostring)] | @tsv")
+          while read -r id size; do
+            [ -z "$id" ] && continue
+            if gh api --method DELETE "repos/$GH_REPO/actions/artifacts/$id" --silent > /dev/null 2>&1; then
+              deleted=$((deleted + 1))
+              freed=$((freed + size))
+              echo "deleted artifact id=$id ($size bytes)"
+            else
+              echo "::warning::failed to delete artifact id=$id"
+            fi
+          done <<< "$artifact_rows"
+
+          cache_rows=$(gh api --paginate "repos/$GH_REPO/actions/caches?per_page=100" \
+            --jq ".actions_caches[] | select(.last_accessed_at < \"$cutoff\") | [(.id|tostring), ((.size_in_bytes // 0)|tostring)] | @tsv")
+          while read -r id size; do
+            [ -z "$id" ] && continue
+            if gh api --method DELETE "repos/$GH_REPO/actions/caches/$id" --silent > /dev/null 2>&1; then
+              freed=$((freed + size))
+              echo "deleted cache id=$id ($size bytes)"
+            else
+              echo "::warning::failed to delete cache id=$id"
+            fi
+          done <<< "$cache_rows"
+
+          echo "### Actions storage cleanup" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Stale artifacts deleted: $deleted" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Approx. bytes freed: $freed" >> "$GITHUB_STEP_SUMMARY"
