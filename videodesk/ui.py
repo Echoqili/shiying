@@ -19,6 +19,20 @@ from .theme import app_icon, icon, apply_theme
 from .widgets import Panel, TaskCard, button, label
 
 
+def confirm_removal(parent, title, text, confirm='删除记录'):
+    """Ask before dropping a record, using explicit buttons instead of a Qt-version-specific enum."""
+    box = QMessageBox(parent)
+    box.setWindowTitle(title)
+    box.setText(text)
+    box.setIcon(QMessageBox.Icon.Question)
+    cancel = box.addButton('取消', QMessageBox.ButtonRole.RejectRole)
+    delete = box.addButton(confirm, QMessageBox.ButtonRole.DestructiveRole)
+    box.setDefaultButton(cancel)
+    box.setEscapeButton(cancel)
+    box.exec()
+    return box.clickedButton() is delete
+
+
 class MainWindow(QMainWindow):
     def __init__(self, store=None):
         super().__init__()
@@ -385,29 +399,28 @@ class MainWindow(QMainWindow):
             self.delete_task(task)
 
     def delete_task(self, task):
-        answer = QMessageBox.question(
-            self, '删除下载记录',
-            '只删除这条下载记录，不会删除已下载的视频、字幕或 AI 笔记。\n\n确定删除吗？',
-            QMessageBox.StandardButton.Delete | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer == QMessageBox.StandardButton.Delete and self.controller.remove(task):
-            self.rebuild()
-            self.footer.setText('已删除下载记录；本地文件仍保留。')
+        text = '只删除这条下载记录，不会删除已下载的视频、字幕或 AI 笔记。'
+        if task.get('status') == 'partial':
+            text += '\n\n这条记录的 AI 笔记尚未完成，删除后无法在应用内继续重试（本地文件仍保留）。'
+        if not confirm_removal(self, '删除下载记录', text + '\n\n确定删除吗？'):
+            return
+        if not self.controller.remove(task):
+            QMessageBox.information(self, '无法删除记录', '该记录正在处理中，请等待任务结束后再删除。')
+            return
+        self.footer.setText('已删除下载记录；本地文件仍保留。')
 
     def clear_finished(self):
         removable = sum(task.get('status') in {'complete', 'failed', 'cancelled', 'interrupted'} for task in self.controller.tasks)
         if not removable:
             return
-        answer = QMessageBox.question(
+        if not confirm_removal(
             self, '清除已结束记录',
             f'将删除 {removable} 条已结束的下载记录，不会删除任何已下载的视频、字幕或 AI 笔记。\n\n确定清除吗？',
-            QMessageBox.StandardButton.Delete | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer == QMessageBox.StandardButton.Delete:
-            removed = self.controller.clear_finished()
-            self.rebuild()
+            confirm='清除记录',
+        ):
+            return
+        removed = self.controller.clear_finished()
+        if removed:
             self.footer.setText(f'已清除 {removed} 条下载记录；本地文件仍保留。')
 
     def details(self, task):

@@ -129,7 +129,11 @@ class TaskCard(QFrame):
         else:
             self.main_action = 'retry'
             self.main_button.setText('重新开始')
-        self.delete_button.setVisible(state not in ACTIVE | {'queued', 'partial'})
+        self.delete_button.setVisible(state not in ACTIVE | {'queued'})
+        self.delete_button.setToolTip(
+            '删除后无法在应用内继续重试 AI 笔记；本地文件仍保留。' if state == 'partial'
+            else '只删除任务记录，保留已下载的视频、字幕和 AI 笔记文件。'
+        )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

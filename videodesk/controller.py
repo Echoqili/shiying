@@ -189,10 +189,10 @@ class Controller(QObject):
         QTimer.singleShot(0, self.next)
 
     def remove(self, task):
-        """Remove a finished record, keeping its files, notes and recoverable AI work."""
-        if task not in self.tasks or task.get('status') in ACTIVE | {'queued', 'partial'}:
+        """Remove one record by identity, keeping its files and notes on disk."""
+        if not any(item is task for item in self.tasks) or task.get('status') in ACTIVE | {'queued'}:
             return False
-        self.tasks.remove(task)
+        self.tasks[:] = [item for item in self.tasks if item is not task]
         self.persist()
         self.queue_changed.emit()
         return True
