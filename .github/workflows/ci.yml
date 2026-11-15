@@ -13,9 +13,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # 禁用 pip 缓存：每次 push 约 250 MiB 且按分支堆积，控制 Actions 存储占用。
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
       - name: Install dependencies

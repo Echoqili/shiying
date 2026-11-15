@@ -31,9 +31,9 @@ jobs:
       RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
       PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # pip 缓存会产生约 250 MiB/次且按分支堆积，禁用以控制 Actions 存储占用。
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Validate release version
@@ -96,7 +96,7 @@ jobs:
       # 仅手动「只构建不发布」时保留产物供下载，且最多 1 天。
       - name: Preserve build-only artifacts (1 day)
         if: env.PUBLISH_RELEASE != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Shiying-${{ env.APP_VERSION }}-windows-x64
           path: dist/release/*
