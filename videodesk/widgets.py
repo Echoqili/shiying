@@ -90,6 +90,7 @@ class TaskCard(QFrame):
         self.main_button = button('', lambda: self.action.emit(task['id'], self.main_action), small=True)
         self.extra_button = button('详情', lambda: self.action.emit(task['id'], 'detail'), small=True)
         self.delete_button = button('删除记录', lambda: self.action.emit(task['id'], 'delete'), small=True)
+        self.delete_button.setToolTip('只删除任务记录，保留已下载的视频、字幕和 AI 笔记文件。')
         actions.addWidget(self.main_button)
         actions.addWidget(self.extra_button)
         actions.addWidget(self.delete_button)
@@ -128,7 +129,7 @@ class TaskCard(QFrame):
         else:
             self.main_action = 'retry'
             self.main_button.setText('重新开始')
-        self.delete_button.setVisible(state not in ACTIVE and state != 'queued')
+        self.delete_button.setVisible(state not in ACTIVE | {'queued', 'partial'})
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

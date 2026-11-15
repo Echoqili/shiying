@@ -189,8 +189,8 @@ class Controller(QObject):
         QTimer.singleShot(0, self.next)
 
     def remove(self, task):
-        """Remove a completed record while preserving its downloaded files and notes."""
-        if task not in self.tasks or task.get('status') in ACTIVE | {'queued'}:
+        """Remove a finished record, keeping its files, notes and recoverable AI work."""
+        if task not in self.tasks or task.get('status') in ACTIVE | {'queued', 'partial'}:
             return False
         self.tasks.remove(task)
         self.persist()

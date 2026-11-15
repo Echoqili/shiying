@@ -226,6 +226,18 @@ def find_js_runtime() -> str:
     return shutil.which('node') or ''
 
 
+def artifact_label(record: dict) -> str:
+    """Describe a downloaded file by its real resolution, container and codecs."""
+    width, height = record.get('width'), record.get('height')
+    size = f'{width}×{height}' if width and height else ''
+    container = Path(record.get('file', '')).suffix.lstrip('.').upper()
+    codecs = '/'.join(codec for codec in (record.get('vcodec'), record.get('acodec'))
+                      if codec and codec != 'none')
+    format_id = record.get('format_id')
+    parts = [value for value in (size, container, codecs, f'格式 ID {format_id}' if format_id else '') if value]
+    return ' · '.join(parts)
+
+
 def download_options(task: dict, ffmpeg: bool) -> dict:
     height = task.get('quality', 'best')
     bound = f'[height<={int(height)}]' if height != 'best' else ''

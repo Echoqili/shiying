@@ -4,7 +4,7 @@ import subprocess
 from unittest.mock import patch
 from pathlib import Path
 
-from videodesk.core import Store, chunk_text, parse_urls, subtitle_text, download_options
+from videodesk.core import Store, artifact_label, chunk_text, parse_urls, subtitle_text, download_options
 from videodesk.core import find_js_runtime
 
 TEST_TEMP = Path(__file__).parent / '.tmp'
@@ -39,6 +39,14 @@ class CoreTests(unittest.TestCase):
         parts = chunk_text(value, 80)
         self.assertTrue(all(len(p) <= 80 for p in parts))
         self.assertEqual(''.join(parts).replace('\n', ''), value.replace('\n', ''))
+
+    def test_artifact_label_shows_resolution_container_and_codecs(self):
+        record = {'file': 'C:/videos/demo.mp4', 'width': 1920, 'height': 1080,
+                  'vcodec': 'h264', 'acodec': 'aac', 'format_id': '137+140'}
+        self.assertEqual(artifact_label(record), '1920×1080 · MP4 · h264/aac · 格式 ID 137+140')
+
+    def test_artifact_label_skips_missing_metadata(self):
+        self.assertEqual(artifact_label({'file': 'C:/videos/demo.webm', 'vcodec': 'none'}), 'WEBM')
 
     def test_store_recovers_interrupted_job(self):
         with tempfile.TemporaryDirectory(dir=TEST_TEMP) as root:

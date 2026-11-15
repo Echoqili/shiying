@@ -25,6 +25,7 @@ settings.json
 tasks.json
 .agents/
 .codex/
+.workbuddy/
 /docs/*
 !/docs/assets/
 !/docs/TESTING.md

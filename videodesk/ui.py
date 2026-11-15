@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from .controller import Controller
-from .core import ACTIVE, Store, find_tools, new_task, parse_urls
+from .core import ACTIVE, Store, artifact_label, find_tools, new_task, parse_urls
 from .settings import SettingsPage
 from .theme import app_icon, icon, apply_theme
 from .widgets import Panel, TaskCard, button, label
@@ -425,9 +425,8 @@ class MainWindow(QMainWindow):
         if task.get('files'):
             records = []
             for record in task['files']:
-                quality = f" · {record['width']}×{record['height']}" if record.get('width') and record.get('height') else ''
-                format_id = f" · 格式 {record['format_id']}" if record.get('format_id') else ''
-                records.append(record['file'] + quality + format_id)
+                details = artifact_label(record)
+                records.append(record['file'] + (f' · {details}' if details else ''))
             content += '\n文件：\n' + '\n'.join(records)
         if task.get('transcript'):
             content += '\n\n文字稿：' + task['transcript']

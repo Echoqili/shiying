@@ -106,12 +106,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python scripts/release_notes.py $env:APP_VERSION --output .cache/release-changes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot build release notes' }
+          $taskChanges = (Get-Content -LiteralPath '.cache/release-changes.md' -Raw -Encoding utf8).Trim()
+          $taskNotes = @("Windows 10/11 64 位，无需 Python。", "", "安装版：下载 Shiying-$env:APP_VERSION-windows-x64-setup.exe，双击安装。", "免安装版：下载 ZIP，全部解压后运行 Shiying/Shiying.exe。", "", "包含 FFmpeg；AI 需配置自己的账号或 API。", "安装包未签名；文件校验值见 SHA256SUMS.txt。", "", "自动测试、打包程序验证及安装/卸载验证均已通过。", "", "## 更新内容", "", $taskChanges) -join "`n"
           $taskReleases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
           $taskRelease = $taskReleases | Where-Object { $_.tag_name -eq $env:RELEASE_TAG } | Select-Object -First 1
           if ($taskRelease -and -not $taskRelease.draft) { throw 'Cannot replace a published release' }
           if (-not $taskRelease) {
-            $taskNotes = @("Windows 10/11 64 位，无需 Python。", "", "安装版：下载 Shiying-$env:APP_VERSION-windows-x64-setup.exe，双击安装。", "免安装版：下载 ZIP，全部解压后运行 Shiying/Shiying.exe。", "", "包含 FFmpeg；AI 需配置自己的账号或 API。", "安装包未签名；文件校验值见 SHA256SUMS.txt。", "", "自动测试、打包程序验证及安装/卸载验证均已通过。") -join "`n"
             $taskBody = @{ tag_name=$env:RELEASE_TAG; target_commitish=(git rev-parse HEAD); name="拾影 Shiying $env:RELEASE_TAG"; draft=$true; body=$taskNotes } | ConvertTo-Json
             $taskBody | gh api --method POST "repos/$env:GITHUB_REPOSITORY/releases" --input - > .cache/action-release.json
             if ($LASTEXITCODE -ne 0) { throw 'Cannot create release draft' }
@@ -129,6 +132,6 @@ jobs:
             if ($taskUploaded.size -ne $taskFile.Length -or $taskUploaded.digest -ne $taskDigest) { throw 'Release asset integrity mismatch' }
             Write-Output "Verified $($taskFile.Name)"
           }
-          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($taskRelease.id)" -f "tag_name=$env:RELEASE_TAG" -f "target_commitish=$(git rev-parse HEAD)" -F draft=false -f make_latest=true --silent
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($taskRelease.id)" -f "tag_name=$env:RELEASE_TAG" -f "target_commitish=$(git rev-parse HEAD)" -F draft=false -f make_latest=true -f "body=$taskNotes" --silent
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
           "Published https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY

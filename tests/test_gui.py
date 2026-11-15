@@ -91,6 +91,7 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.controller.remove(complete))
         self.assertTrue(downloaded.is_file())
         self.assertFalse(self.controller.remove(new_task('', self.fixture.settings, status='queued')))
+        self.assertFalse(self.controller.remove(partial))
         self.assertEqual(self.controller.clear_finished(), 1)
         self.assertEqual([task['id'] for task in self.controller.tasks], [partial['id']])
         self.assertEqual([task['id'] for task in self.store.load_tasks()], [partial['id']])
